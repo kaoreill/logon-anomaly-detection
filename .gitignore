@@ -1,0 +1,41 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Build and packaging
+build/
+dist/
+*.egg-info/
+
+# Generated model artifacts
+models/*.pkl
+
+# Generated visualizations and reports
+visualizations/*.png
+visualizations/*.html
+visualizations/*.csv
+
+# Generated datasets
+data/latest_scored_logons.csv
+
+# Logs
+*.log
