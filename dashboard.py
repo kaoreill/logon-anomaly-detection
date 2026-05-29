@@ -49,6 +49,20 @@ filtered_df = results_df[
     & (results_df['ensemble_anomaly_score'] >= score_threshold)
 ].copy()
 
+if 'all_slow' in filtered_df.columns:
+    all_slow_filter = st.sidebar.selectbox('All Slow Flag', options=['All', 'Yes', 'No'], index=0)
+    if all_slow_filter == 'Yes':
+        filtered_df = filtered_df[filtered_df['all_slow'].astype(int) == 1]
+    elif all_slow_filter == 'No':
+        filtered_df = filtered_df[filtered_df['all_slow'].astype(int) == 0]
+
+if 'is_business_hours' in filtered_df.columns:
+    business_hours_filter = st.sidebar.selectbox('Business Hours', options=['All', 'Yes', 'No'], index=0)
+    if business_hours_filter == 'Yes':
+        filtered_df = filtered_df[filtered_df['is_business_hours'].astype(bool)]
+    elif business_hours_filter == 'No':
+        filtered_df = filtered_df[~filtered_df['is_business_hours'].astype(bool)]
+
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 kpi1.metric('Scored Events', f"{len(filtered_df):,}")
 kpi2.metric('Predicted Anomalies', f"{int(filtered_df['predicted_anomaly'].sum()):,}")
@@ -56,18 +70,21 @@ kpi3.metric('Anomaly Rate', f"{filtered_df['predicted_anomaly'].mean() * 100:.2f
 kpi4.metric('Avg Score', f"{filtered_df['ensemble_anomaly_score'].mean():.3f}")
 
 st.subheader('Anomaly Timeline')
-timeline = filtered_df.set_index('timestamp').resample('1h').agg(
-    anomaly_rate=('predicted_anomaly', 'mean'),
-    avg_score=('ensemble_anomaly_score', 'mean'),
-    events=('predicted_anomaly', 'size')
-).reset_index()
-fig_timeline = px.line(
-    timeline,
-    x='timestamp',
-    y=['anomaly_rate', 'avg_score'],
-    title='Hourly Anomaly Rate and Average Score'
-)
-st.plotly_chart(fig_timeline, use_container_width=True)
+if filtered_df.empty:
+    st.info('No records match the current filters.')
+else:
+    timeline = filtered_df.set_index('timestamp').resample('1h').agg(
+        anomaly_rate=('predicted_anomaly', 'mean'),
+        avg_score=('ensemble_anomaly_score', 'mean'),
+        events=('predicted_anomaly', 'size')
+    ).reset_index()
+    fig_timeline = px.line(
+        timeline,
+        x='timestamp',
+        y=['anomaly_rate', 'avg_score'],
+        title='Hourly Anomaly Rate and Average Score'
+    )
+    st.plotly_chart(fig_timeline, use_container_width=True)
 
 st.subheader('Score vs Duration')
 fig_scatter = px.scatter(
@@ -82,6 +99,66 @@ fig_scatter = px.scatter(
     title='Logon Duration vs Anomaly Score'
 )
 st.plotly_chart(fig_scatter, use_container_width=True)
+
+st.subheader('Model Score Comparison')
+model_score_columns = ['if_score', 'lof_score', 'svm_score', 'ee_score', 'ensemble_score']
+available_score_columns = [c for c in model_score_columns if c in filtered_df.columns]
+
+if available_score_columns:
+    score_summary = filtered_df[available_score_columns].mean().reset_index()
+    score_summary.columns = ['model', 'avg_score']
+    fig_score_summary = px.bar(
+        score_summary,
+        x='model',
+        y='avg_score',
+        color='model',
+        title='Average Model Score by Algorithm'
+    )
+    st.plotly_chart(fig_score_summary, use_container_width=True)
+
+    long_scores = filtered_df[available_score_columns].melt(
+        var_name='model',
+        value_name='score'
+    )
+    fig_score_distribution = px.box(
+        long_scores,
+        x='model',
+        y='score',
+        color='model',
+        title='Model Score Distributions'
+    )
+    st.plotly_chart(fig_score_distribution, use_container_width=True)
+else:
+    st.warning('Model score columns not found in scored dataset.')
+
+st.subheader('Engineered Feature Distributions')
+engineered_features = [
+    'profile_ratio', 'auth_ratio', 'init_ratio', 'resource_pressure',
+    'load_severity', 'logon_zscore', 'all_slow', 'hour', 'is_business_hours'
+]
+available_engineered_features = [f for f in engineered_features if f in filtered_df.columns]
+
+if available_engineered_features:
+    selected_feature = st.selectbox(
+        'Select engineered feature',
+        options=available_engineered_features,
+        index=0
+    )
+    feature_df = filtered_df.copy()
+    if feature_df[selected_feature].dtype == bool:
+        feature_df[selected_feature] = feature_df[selected_feature].astype(int)
+
+    fig_feature_dist = px.histogram(
+        feature_df,
+        x=selected_feature,
+        color='predicted_anomaly',
+        barmode='overlay',
+        nbins=40,
+        title=f'Distribution of {selected_feature}'
+    )
+    st.plotly_chart(fig_feature_dist, use_container_width=True)
+else:
+    st.warning('No engineered feature columns found in scored dataset.')
 
 st.subheader('Top Anomaly Explanations')
 explanation_df = filtered_df[filtered_df['predicted_anomaly']].copy()

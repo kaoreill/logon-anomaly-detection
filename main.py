@@ -7,7 +7,8 @@ import pandas as pd
 import numpy as np
 import os
 from src.data_generator import generate_synthetic_logons
-from src.model import LogonAnomalyDetector
+from src.feature_engineer import FeatureEngineer
+from src.model import AdvancedAnomalyDetector
 from src.visualiser import visualize_logon_metrics, visualize_anomalies
 from sklearn.metrics import classification_report, confusion_matrix, precision_score, recall_score, f1_score
 import seaborn as sns
@@ -68,7 +69,7 @@ def run_time_based_backtest(df, contamination=0.05, output_dir='visualizations/'
         train_df = df_sorted.iloc[:train_end]
         test_df = df_sorted.iloc[train_end:test_end].copy()
 
-        fold_detector = LogonAnomalyDetector(contamination=contamination)
+        fold_detector = AdvancedAnomalyDetector(contamination=contamination)
         fold_detector.fit(train_df)
         fold_results = fold_detector.predict(test_df)
 
@@ -199,6 +200,19 @@ def main():
     # STEP 1: Generate synthetic data
     print("\n[STEP 1] Generating synthetic logon data...")
     df = generate_synthetic_logons(n_records=10000, anomaly_rate=0.05)
+
+    # STEP 1.5: Feature engineering
+    print("\n[STEP 1.5] Engineering advanced features...")
+    original_columns = list(df.columns)
+    df = FeatureEngineer.engineer_features(df)
+    engineered_columns = [col for col in df.columns if col not in original_columns]
+
+    print(f"✓ Added {len(engineered_columns)} engineered features")
+    if engineered_columns:
+        sample_feature_cols = engineered_columns[:6]
+        print("  - Sample engineered feature values:")
+        print(df[sample_feature_cols].head(3).to_string(index=False))
+
     df.to_csv('data/synthetic_logons.csv', index=False)
     print(f"✓ Generated {len(df)} logon records")
     print(f"  - Anomalies: {df['is_anomaly'].sum()} ({df['is_anomaly'].mean()*100:.1f}%)")
@@ -213,7 +227,7 @@ def main():
     train_df = df[:split_idx]
     test_df = df[split_idx:].copy()
     
-    detector = LogonAnomalyDetector(contamination=0.05)
+    detector = AdvancedAnomalyDetector(contamination=0.05)
     detector.fit(train_df)
     print(f"  - Calibrated threshold: {detector.threshold:.3f} ({detector.threshold_source})")
     
